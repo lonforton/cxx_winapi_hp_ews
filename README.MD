@@ -1,6 +1,7 @@
 # C++ Winapi wrapper for HP EWS connection
 
 **Input:** printer's vid and pid
+
 **Output:** printer usb response or printer status
 
 Winapi wrapper to connect to embedded web server in HP printers (HP EWS) via usb and get device current status.
