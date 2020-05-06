@@ -1,4 +1,4 @@
-#C++ Winapi wrapper for HP EWS connection
+# C++ Winapi wrapper for HP EWS connection
 
 **Input:** printer's vid and pid
 **Output:** printer usb response or printer status
@@ -15,25 +15,32 @@ By default standard out package will be used to get printer response, but you ca
 Printer responsed as html page inside xml packet which contains status inside "deviceStatus_tableCell" tag. You can call CxxWinapi::get_text_status_from_html to get only status string.
 
 
-##Defining GUIDs and device IDs
+## Defining GUIDs and device IDs
 
 Two ways to define Device Interface Guid
 
+```
 // example  GUID_DEVINTERFACE_DISK {53F56307-B6BF-11D0-94F2-00A0C91EFB8B}
 DEFINE_GUID(GUID_DEVINTERFACE_DISK, 0x53f56307, 0xb6bf, 0x11d0, 0x94, 0xf2, 0x00, 0xa0, 0xc9, 0x1e, 0xfb, 0x8b);
 static constexpr GUID GUID_DEVINTERFACE_DISK = {0x53f56307, 0xb6bf, 0x11d0, { 0x94, 0xf2, 0x00, 0xa0, 0xc9, 0x1e, 0xfb, 0x8b}};
+```
 
 Define GUID 
 
+```
 GUID* right_guid = (GUID*)(void*)&GUID_DEVINTERFACE_DISK;
+```
 
 Define device instance identifier
 
+```
 WCHAR DeviceInstanceID[] = L"USB\\VID_03F0&PID_612A&MI_01\\6&2EF0B81C&1&0001\0";
+```
 
 
-##Registry entries examples (HP LaserJet M104a)
+## Registry entries examples (HP LaserJet M104a)
 
+```
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\USB\VID_03F0&PID_612A\VNF4L07878
 ClassGUID = {36fc9e60-c465-11cf-8056-444553540000}
 
@@ -63,3 +70,4 @@ DeviceInterfaceGUID = {4E5B5531-AC60-4623-8672-BD70F28DE4CC}
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\USB\VID_03F0&PID_612A&MI_03\7&2f1a428f&0&0001\
 Class GUID = {36fc9e60-c465-11cf-8056-444553540000}
 Device desc = HP LaserJet M101-M106(IPP1 WinUSB)
+```
