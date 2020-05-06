@@ -44,7 +44,7 @@ int main()
   PipesInfo pipes_info = cxx_winapi.get_pipes_info(_winusb_interface_handle);
 
 
-std::string out_package("GET /info_deviceStatus.html?tab=Home&menu=DevStatus HTTP/1.1\n\
+std::string out_package{"GET /info_deviceStatus.html?tab=Home&menu=DevStatus HTTP/1.1\n\
 Accept: image/gif, image/jpeg, image/pjpeg, application/x-ms-application, application/xaml+xml, application/x-ms-xbap, application/vnd.ms-excel, application/vnd.ms-powerpoint, application/msword, */*\n\
 Accept-Encoding: gzip, deflate\n\
 Accept-Language: ru-RU\n\
@@ -56,7 +56,7 @@ Referer: http://localhost:50002/info_deviceStatus.html?tab=Home&menu=DevStatus\n
 UA-CPU: AMD64\n\
 User-Agent: Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.2; Win64; x64; Trident/7.0; .NET4.0C; .NET4.0E)\n\
 \n\
-");
+"};
 
   cxx_winapi.write_pipe_async(_winusb_interface_handle, pipes_info);   
   // or cxx_winapi.write_pipe_async(_winusb_interface_handle, pipes_info, out_package);
