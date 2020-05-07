@@ -48,7 +48,7 @@ CxxWinapi::device_properties_list CxxWinapi::get_device_instance_properties(int 
   return device_props_list;
 }
 
-CxxWinapi::device_instance_identifiers_list CxxWinapi::get_device_instance_identifiers(const std::string& vid, const std::string& pid) {
+CxxWinapi::device_instance_identifiers_list CxxWinapi::get_usb_device_instance_identifiers(const std::string& vid, const std::string& pid) {
   device_instance_identifiers_list devices_list;
 
   std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(converter.from_bytes(vid)).append(L"&PID_").append(converter.from_bytes(pid));
@@ -66,9 +66,48 @@ CxxWinapi::device_instance_identifiers_list CxxWinapi::get_device_instance_ident
   PWCHAR device_ids_buff = new WCHAR[device_ids_buff_len];
 
   DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
-  for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData); ++i) {
-    CONFIGRET ret = CM_Get_Device_IDW(i, device_ids_buff, device_ids_buff_len, 0);
-    if (ret == CR_SUCCESS) {
+  for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData); ++i) {    
+    CONFIGRET ret = CM_Get_Device_IDW(DeviceInfoData.DevInst, device_ids_buff, device_ids_buff_len, 0);
+    if (ret == CR_SUCCESS) {      
+      if (wcsstr(device_ids_buff, device_to_find.c_str())) {
+        devices_list.emplace_back(converter.to_bytes(std::wstring(device_ids_buff)));
+      }
+    } 
+    else {
+      std::cout << "CM_Get_Device_IDW error " << ret << " for usb device " << std::to_string(i) << std::endl;
+    }
+  }
+
+  if (GetLastError() != NO_ERROR && GetLastError() != ERROR_NO_MORE_ITEMS) {
+    return device_instance_identifiers_list{};
+  }
+
+  SetupDiDestroyDeviceInfoList(hDevInfo);
+
+  return devices_list;
+}
+
+CxxWinapi::device_instance_identifiers_list CxxWinapi::get_all_device_instance_identifiers(const std::string& vid, const std::string& pid) {
+  device_instance_identifiers_list devices_list;
+
+  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(converter.from_bytes(vid)).append(L"&PID_").append(converter.from_bytes(pid));
+
+  HDEVINFO hDevInfo;
+  SP_DEVINFO_DATA DeviceInfoData;
+  hDevInfo = SetupDiGetClassDevsW(NULL, NULL, 0, DIGCF_ALLCLASSES | DIGCF_PROFILE);
+
+  if (hDevInfo == INVALID_HANDLE_VALUE) {
+    std::cout << "hDevInfo INVALID_HANDLE_VALUE" << std::endl;
+    return device_instance_identifiers_list{};
+  }
+
+  ULONG device_ids_buff_len = 200;
+  PWCHAR device_ids_buff = new WCHAR[device_ids_buff_len];
+
+  DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+  for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData); ++i) {    
+    CONFIGRET ret = CM_Get_Device_IDW(DeviceInfoData.DevInst, device_ids_buff, device_ids_buff_len, 0);
+    if (ret == CR_SUCCESS) {      
       if (wcsstr(device_ids_buff, device_to_find.c_str())) {
         devices_list.emplace_back(converter.to_bytes(std::wstring(device_ids_buff)));
       }
@@ -93,10 +132,76 @@ CxxWinapi::p_dev_interface_guid CxxWinapi::get_device_interface_guid(const std::
                                              .append(converter.from_bytes(device_instance_identifier))
                                              .append(L"\\Device Parameters");
 
+  
+
   std::wstring guid_reg_value = get_string_reg_key(registry_path, L"DeviceInterfaceGUID", L"");    
+
+  std::wcout << registry_path << " " << guid_reg_value << std::endl;
+
   GUID *guid = new GUID();
 
   IIDFromString(guid_reg_value.c_str(), (LPIID)guid);  
+
+  return guid;
+}
+
+CxxWinapi::p_class_interface_guid CxxWinapi::get_class_interface_guid(const std::string& vid, const std::string& pid, const std::string& search_string)
+{
+
+  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(converter.from_bytes(vid))
+                                              .append(L"&PID_").append(converter.from_bytes(pid))
+                                              .append(L"&").append(converter.from_bytes(search_string));
+
+                                              std::wcout << device_to_find << std::endl;
+
+  HDEVINFO hDevInfo;
+  SP_DEVINFO_DATA DeviceInfoData;
+  hDevInfo = SetupDiGetClassDevsW(NULL, NULL, 0, DIGCF_ALLCLASSES | DIGCF_PROFILE);
+
+  if (hDevInfo == INVALID_HANDLE_VALUE) {
+    std::cout << "hDevInfo INVALID_HANDLE_VALUE" << std::endl;
+    return NULL;
+  }
+
+  ULONG device_ids_buff_len = 200;
+  PWCHAR device_ids_buff = new WCHAR[device_ids_buff_len];
+
+  DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+  for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData); ++i) {    
+    CONFIGRET ret = CM_Get_Device_IDW(DeviceInfoData.DevInst, device_ids_buff, device_ids_buff_len, 0);
+    if (ret == CR_SUCCESS) {      
+      
+      if (wcsstr(device_ids_buff, device_to_find.c_str())) {
+        
+        ULONG  pulRegDataType = 0;
+        ULONG  pulLength = 0;
+        CM_Get_DevNode_Registry_PropertyW(DeviceInfoData.DevInst, CM_DRP_DRIVER, &pulRegDataType, NULL, &pulLength, 0);
+         std::cout << " - " << DeviceInfoData.DevInst << " " << pulRegDataType << " " << pulLength << std::endl;
+        PVOID *void_buffer = new PVOID[pulLength];
+       CM_Get_DevNode_Registry_PropertyW(DeviceInfoData.DevInst, CM_DRP_DRIVER, &pulRegDataType, void_buffer , &pulLength, 0);
+
+       // std::wcout << std::wstring((PWSTR) void_buffer) << " " << std::endl;          
+
+
+        delete [] void_buffer;
+
+      }
+    } 
+    else {
+      std::cout << "CM_Get_Device_IDW error " << ret << " for device " << std::to_string(i) << std::endl;
+    }
+  }
+
+  if (GetLastError() != NO_ERROR && GetLastError() != ERROR_NO_MORE_ITEMS) {
+    return NULL;
+  }
+
+  SetupDiDestroyDeviceInfoList(hDevInfo);
+
+  constexpr GUID GUID_DEVINTERFACE_HP_FILE = {0x6bdd1fc6, 0x810f, 0x11d0, { 0xbe, 0xc7, 0x08, 0x00, 0x2b, 0xe2, 0x09, 0x2f}}; //  {6bdd1fc6-810f-11d0-bec7-08002be2092f}
+
+  GUID *guid = (GUID*)(void*)&GUID_DEVINTERFACE_HP_FILE;
+  //IIDFromString(guid_reg_value.c_str(), (LPIID)guid);  
 
   return guid;
 }
@@ -150,7 +255,7 @@ bool CxxWinapi::set_security()
   return true;
 }
 
-CxxWinapi::win_usb_handle CxxWinapi::get_win_usb_handle(p_dev_interface_guid dev_interface_guid, const std::string& device_instance_identifier)
+CxxWinapi::winusb_interface_handle CxxWinapi::obtain_winusb_handle(p_dev_interface_guid dev_interface_guid, const std::string& device_instance_identifier)
 {
 	HDEVINFO hDevInfo = SetupDiGetClassDevsW(dev_interface_guid, converter.from_bytes(device_instance_identifier).c_str(), NULL, DIGCF_DEVICEINTERFACE);
 	if (hDevInfo == INVALID_HANDLE_VALUE) {
@@ -214,12 +319,123 @@ CxxWinapi::win_usb_handle CxxWinapi::get_win_usb_handle(p_dev_interface_guid dev
   return winusb_interface_handle;
 }
 
-PipesInfo CxxWinapi::get_pipes_info(win_usb_handle winusb_interface_handle)
+CxxWinapi::winusb_interface_handle CxxWinapi::get_winusb_handle(const std::string& vid, const std::string& pid) 
+{
+  std::string device_instance_identifier;
+  auto devices_identifiers = get_usb_device_instance_identifiers(vid, pid);
+  for(const auto& item : devices_identifiers) {    
+    if(item.find(_mi_id) != std::string::npos) {   
+        device_instance_identifier += item; 
+        break;
+    }           
+  }  
+
+  if(device_instance_identifier.empty()) {
+    std::cout << "usb device not found" << std::endl;
+    return NULL;
+  }
+
+   // getting device interface guid for MI_01 (common for all MI_01)
+  p_dev_interface_guid device_interface_guid = get_device_interface_guid(device_instance_identifier);
+
+  CxxWinapi::winusb_interface_handle winusb_iface_handle;
+  for(const auto& item : devices_identifiers) {    
+    if(item.find(_mi_id) != std::string::npos) { 
+      winusb_iface_handle = obtain_winusb_handle(device_interface_guid, item);
+      if(winusb_iface_handle){
+        device_instance_identifier = item;
+        break;        
+      } 
+    }           
+  }
+
+  return winusb_iface_handle;
+}
+
+CxxWinapi::file_interface_handle CxxWinapi::obtain_file_interface_handle(p_class_interface_guid dev_interface_guid, const std::string& device_instance_identifier)
+{  
+  HDEVINFO hDevInfo = SetupDiGetClassDevsW(dev_interface_guid, converter.from_bytes(device_instance_identifier).c_str(), NULL, DIGCF_DEVICEINTERFACE);
+	if (hDevInfo == INVALID_HANDLE_VALUE) {
+		std::cout << "Invalid SetupDiGetClassDevs" << std::endl;
+		return NULL;
+	}
+
+  SP_DEVICE_INTERFACE_DATA devInterfaceData = {0};
+  devInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+  BYTE Buf[1024];
+  PSP_DEVICE_INTERFACE_DETAIL_DATA_W pspdidd = (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)Buf;  
+  DWORD dwIndex = 0;
+
+  bool bRet = SetupDiEnumDeviceInterfaces(hDevInfo, NULL, dev_interface_guid, dwIndex, &devInterfaceData);
+  if (!bRet) {
+    std::cout << "SetupDiEnumDeviceInterfaces error " << GetLastError() << std::endl;
+    return NULL;
+  }
+
+  SP_DEVICE_INTERFACE_DATA spdid;
+  spdid.cbSize = sizeof(spdid);
+
+  SetupDiEnumInterfaceDevice(hDevInfo, NULL, dev_interface_guid, dwIndex, &spdid);
+
+  DWORD dwSize = 0;
+  SetupDiGetDeviceInterfaceDetailW(hDevInfo, &spdid, NULL, 0, &dwSize, NULL);
+  if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+    std::cout << "SetupDiGetDeviceInterfaceDetailW" << std::endl;
+    return NULL;
+  } else if (dwSize == 0 && dwSize > sizeof(Buf)) {
+    std::cout << "SetupDiGetDeviceInterfaceDetailW with NULL - returned size is 0 or small" << std::endl;
+    return NULL;
+  }
+
+  pspdidd->cbSize = sizeof(*pspdidd); 
+  SP_DEVINFO_DATA spdd;
+  ZeroMemory((PVOID)&spdd, sizeof(spdd));
+  spdd.cbSize = sizeof(spdd);
+
+  long res = SetupDiGetDeviceInterfaceDetailW(hDevInfo, &spdid, pspdidd, dwSize, &dwSize, &spdd);
+  if (!res) {
+    std::cout << "Invalid SetupDiGetDeviceInterfaceDetail" << std::endl;
+    return NULL;
+  }
+
+  HANDLE hDrive = CreateFileW(pspdidd->DevicePath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+  if (hDrive == INVALID_HANDLE_VALUE) {
+    std::cout << "CreateFileW error " << GetLastError() << " for " << device_instance_identifier << std::endl;
+    return NULL;
+  }
+
+  return hDrive;
+}
+
+CxxWinapi::file_interface_handle CxxWinapi::get_file_interface_handle(const std::string& vid, const std::string& pid) 
+{  
+  std::string device_instance_identifier;
+  auto devices_identifiers = get_all_device_instance_identifiers(vid, pid);
+  for (const auto& item : devices_identifiers) {
+    if (item.find(_mi_id) != std::string::npos) {
+      device_instance_identifier += item;
+      break;
+    }
+  }
+
+  if (device_instance_identifier.empty()) {
+    std::cout << "device not found" << std::endl;
+    return NULL;
+  }
+
+  p_class_interface_guid class_interface_guid = get_class_interface_guid(vid, pid);
+
+  file_interface_handle file_iface_handle = obtain_file_interface_handle(class_interface_guid, device_instance_identifier);
+
+  return file_iface_handle;
+}
+
+PipesInfo CxxWinapi::get_pipes_info(winusb_interface_handle winusb_iface_handle)
 {
   PipesInfo pipes_info = {0};
 
   USB_INTERFACE_DESCRIPTOR *eUsbInterfaceDescriptor = new USB_INTERFACE_DESCRIPTOR();
-  bool ret = WinUsb_QueryInterfaceSettings(winusb_interface_handle, 0, eUsbInterfaceDescriptor);
+  bool ret = WinUsb_QueryInterfaceSettings(winusb_iface_handle, 0, eUsbInterfaceDescriptor);
   if (!ret) {
     std::cout << "WinUsb_QueryInterfaceSettings error " << GetLastError() << std::endl;
     return pipes_info;
@@ -229,7 +445,7 @@ PipesInfo CxxWinapi::get_pipes_info(win_usb_handle winusb_interface_handle)
   ZeroMemory(&pipe_info, sizeof(WINUSB_PIPE_INFORMATION));
 
   for (int i = 0; i < eUsbInterfaceDescriptor->bNumEndpoints; ++i) {
-    if (WinUsb_QueryPipe(winusb_interface_handle, 0, i, &pipe_info)) {
+    if (WinUsb_QueryPipe(winusb_iface_handle, 0, i, &pipe_info)) {
       if (pipe_info.PipeType == UsbdPipeTypeBulk) {
         if (USB_ENDPOINT_DIRECTION_OUT(pipe_info.PipeId)) {
           pipes_info.pipe_id_out = pipe_info.PipeId;
@@ -244,9 +460,8 @@ PipesInfo CxxWinapi::get_pipes_info(win_usb_handle winusb_interface_handle)
   return pipes_info;
 }
 
-bool CxxWinapi::write_pipe_async(win_usb_handle winusb_interface_handle, const PipesInfo& pipes_info, const std::string& out_package)
+bool CxxWinapi::write_pipe_async(winusb_interface_handle winusb_iface_handle, const PipesInfo& pipes_info, const std::string& out_package)
 {  
-
   // posible to convert out_package to hex using hex2str
 
    UCHAR pipe_id = pipes_info.pipe_id_out;
@@ -269,7 +484,7 @@ bool CxxWinapi::write_pipe_async(win_usb_handle winusb_interface_handle, const P
   ZeroMemory(&m_overlapped_write, sizeof(OVERLAPPED));
   m_overlapped_write.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
   
-  if (!WinUsb_WritePipe(winusb_interface_handle, pipe_id, write_buffer, write_buffer_length, &length_transferred, &m_overlapped_write))
+  if (!WinUsb_WritePipe(winusb_iface_handle, pipe_id, write_buffer, write_buffer_length, &length_transferred, &m_overlapped_write))
   {
     if (GetLastError() != ERROR_IO_PENDING) {
       std::cerr << "WritePipe error (not io_pending) " << GetLastError() << std::endl;
@@ -280,7 +495,7 @@ bool CxxWinapi::write_pipe_async(win_usb_handle winusb_interface_handle, const P
   DWORD wait_result = WaitForSingleObject(m_overlapped_write.hEvent, 100);
   if(wait_result == WAIT_OBJECT_0) {
     DWORD bytes_written = 0;
-    bool over_res = WinUsb_GetOverlappedResult(winusb_interface_handle, &m_overlapped_write, &bytes_written, TRUE);
+    bool over_res = WinUsb_GetOverlappedResult(winusb_iface_handle, &m_overlapped_write, &bytes_written, TRUE);
      if (!over_res) {
         std::cout << "WinUsb_GetOverlappedResult error " << GetLastError() << std::endl;
         return false;
@@ -303,9 +518,55 @@ bool CxxWinapi::write_pipe_async(win_usb_handle winusb_interface_handle, const P
   return true;
 }
 
-std::string CxxWinapi::read_pipe_async(win_usb_handle winusb_interface_handle, const PipesInfo& pipes_info)
+bool CxxWinapi::write_file_async(file_interface_handle file_iface_handle, const std::string& out_package)
 {
-  std::string printer_answer;
+  UCHAR default_package_buffer[] = "\x47\x45\x54\x20\x2f\x69\x6e\x66\x6f\x5f\x64\x65\x76\x69\x63\x65\x53\x74\x61\x74\x75\x73\x2e\x68\x74\x6d\x6c\x3f\x74\x61\x62\x3d\x48\x6f\x6d\x65\x26\x6d\x65\x6e\x75\x3d\x44\x65\x76\x53\x74\x61\x74\x75\x73\x20\x48\x54\x54\x50\x2f\x31\x2e\x31\x0d\x0a\x41\x63\x63\x65\x70\x74\x3a\x20\x69\x6d\x61\x67\x65\x2f\x67\x69\x66\x2c\x20\x69\x6d\x61\x67\x65\x2f\x6a\x70\x65\x67\x2c\x20\x69\x6d\x61\x67\x65\x2f\x70\x6a\x70\x65\x67\x2c\x20\x61\x70\x70\x6c\x69\x63\x61\x74\x69\x6f\x6e\x2f\x78\x2d\x6d\x73\x2d\x61\x70\x70\x6c\x69\x63\x61\x74\x69\x6f\x6e\x2c\x20\x61\x70\x70\x6c\x69\x63\x61\x74\x69\x6f\x6e\x2f\x78\x61\x6d\x6c\x2b\x78\x6d\x6c\x2c\x20\x61\x70\x70\x6c\x69\x63\x61\x74\x69\x6f\x6e\x2f\x78\x2d\x6d\x73\x2d\x78\x62\x61\x70\x2c\x20\x61\x70\x70\x6c\x69\x63\x61\x74\x69\x6f\x6e\x2f\x76\x6e\x64\x2e\x6d\x73\x2d\x65\x78\x63\x65\x6c\x2c\x20\x61\x70\x70\x6c\x69\x63\x61\x74\x69\x6f\x6e\x2f\x76\x6e\x64\x2e\x6d\x73\x2d\x70\x6f\x77\x65\x72\x70\x6f\x69\x6e\x74\x2c\x20\x61\x70\x70\x6c\x69\x63\x61\x74\x69\x6f\x6e\x2f\x6d\x73\x77\x6f\x72\x64\x2c\x20\x2a\x2f\x2a\x0d\x0a\x41\x63\x63\x65\x70\x74\x2d\x45\x6e\x63\x6f\x64\x69\x6e\x67\x3a\x20\x67\x7a\x69\x70\x2c\x20\x64\x65\x66\x6c\x61\x74\x65\x0d\x0a\x41\x63\x63\x65\x70\x74\x2d\x4c\x61\x6e\x67\x75\x61\x67\x65\x3a\x20\x72\x75\x2d\x52\x55\x0d\x0a\x43\x6f\x6e\x6e\x65\x63\x74\x69\x6f\x6e\x3a\x20\x4b\x65\x65\x70\x2d\x41\x6c\x69\x76\x65\x0d\x0a\x43\x6f\x6f\x6b\x69\x65\x3a\x20\x6c\x61\x6e\x67\x3d\x72\x75\x73\x0d\x0a\x48\x4f\x53\x54\x3a\x20\x6c\x6f\x63\x61\x6c\x68\x6f\x73\x74\x0d\x0a\x48\x6f\x73\x74\x3a\x20\x6c\x6f\x63\x61\x6c\x68\x6f\x73\x74\x3a\x35\x30\x30\x30\x32\x0d\x0a\x52\x65\x66\x65\x72\x65\x72\x3a\x20\x68\x74\x74\x70\x3a\x2f\x2f\x6c\x6f\x63\x61\x6c\x68\x6f\x73\x74\x3a\x35\x30\x30\x30\x32\x2f\x69\x6e\x66\x6f\x5f\x64\x65\x76\x69\x63\x65\x53\x74\x61\x74\x75\x73\x2e\x68\x74\x6d\x6c\x3f\x74\x61\x62\x3d\x48\x6f\x6d\x65\x26\x6d\x65\x6e\x75\x3d\x44\x65\x76\x53\x74\x61\x74\x75\x73\x0d\x0a\x55\x41\x2d\x43\x50\x55\x3a\x20\x41\x4d\x44\x36\x34\x0d\x0a\x55\x73\x65\x72\x2d\x41\x67\x65\x6e\x74\x3a\x20\x4d\x6f\x7a\x69\x6c\x6c\x61\x2f\x34\x2e\x30\x20\x28\x63\x6f\x6d\x70\x61\x74\x69\x62\x6c\x65\x3b\x20\x4d\x53\x49\x45\x20\x38\x2e\x30\x3b\x20\x57\x69\x6e\x64\x6f\x77\x73\x20\x4e\x54\x20\x36\x2e\x32\x3b\x20\x57\x69\x6e\x36\x34\x3b\x20\x78\x36\x34\x3b\x20\x54\x72\x69\x64\x65\x6e\x74\x2f\x37\x2e\x30\x3b\x20\x2e\x4e\x45\x54\x34\x2e\x30\x43\x3b\x20\x2e\x4e\x45\x54\x34\x2e\x30\x45\x29\x0d\x0a\x0d\x0a\x00";
+
+  UCHAR *write_buffer;
+  if(out_package.empty()) {
+    write_buffer = default_package_buffer;
+  }
+  else {
+    write_buffer = new UCHAR[out_package.size() + 1];
+    std::copy(out_package.begin(), out_package.end(), write_buffer);
+    write_buffer[out_package.length()] = 0;
+  }
+
+  ULONG write_buffer_length = strlen((const char *)write_buffer);
+  ULONG length_transferred = 0;   // not used, only need for non-overlapped write
+
+  OVERLAPPED m_overlapped_write;
+  ZeroMemory(&m_overlapped_write, sizeof(OVERLAPPED));
+  m_overlapped_write.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+
+  if (!WriteFile(file_iface_handle, write_buffer, write_buffer_length, &length_transferred, &m_overlapped_write))
+  {
+    if (GetLastError() != ERROR_IO_PENDING) {
+      std::cerr << "WriteFile error (not io_pending) " << GetLastError() << std::endl;
+      return false;
+    }
+  }
+
+  DWORD bytes_written = 0;
+  bool over_res = GetOverlappedResult(file_iface_handle, &m_overlapped_write, &bytes_written, TRUE);
+  if (!over_res) {
+    std::cout << "GetOverlappedResult error " << GetLastError() << std::endl;
+    return false;
+  }
+
+  if (bytes_written > 0) {
+    std::cout << "written " << bytes_written << " bytes" << std::endl;
+  } else {
+    return false;
+  }
+
+  return true;
+
+}
+
+std::string CxxWinapi::read_pipe_async(winusb_interface_handle winusb_iface_handle, const PipesInfo& pipes_info)
+{
+  std::string printer_response;
 
   OVERLAPPED overlapped_read;
   ZeroMemory(&overlapped_read, sizeof(OVERLAPPED));
@@ -320,7 +581,7 @@ std::string CxxWinapi::read_pipe_async(win_usb_handle winusb_interface_handle, c
   bool read_ended = false;
   while (!read_ended)
   {
-    if (!WinUsb_ReadPipe(winusb_interface_handle, pipe_id_in, read_buffer, read_buffer_size, &bytes_readed_readpipe, &overlapped_read))
+    if (!WinUsb_ReadPipe(winusb_iface_handle, pipe_id_in, read_buffer, read_buffer_size, &bytes_readed_readpipe, &overlapped_read))
     {
       DWORD read_pipe = GetLastError();      
       if (read_pipe != ERROR_IO_PENDING) {
@@ -333,17 +594,17 @@ std::string CxxWinapi::read_pipe_async(win_usb_handle winusb_interface_handle, c
     DWORD wait_result = WaitForSingleObject(overlapped_read.hEvent, INFINITE);
     if (wait_result == WAIT_OBJECT_0)
     {
-      bool over_res = WinUsb_GetOverlappedResult(winusb_interface_handle, &overlapped_read, &bytes_readed, TRUE);      
+      bool over_res = WinUsb_GetOverlappedResult(winusb_iface_handle, &overlapped_read, &bytes_readed, TRUE);      
       if (!over_res) {
         std::cout << "WinUsb_GetOverlappedResult error " << GetLastError() << std::endl;
-        return printer_answer;
+        return printer_response;
       }
       
       if (bytes_readed > 0)
       {
-        printer_answer.append(reinterpret_cast<const char *>(read_buffer));
+        printer_response.append(reinterpret_cast<const char *>(read_buffer));
 
-        if (printer_answer.find("</html>") != std::string::npos) {
+        if (printer_response.find("</html>") != std::string::npos) {
           std::cout << "end of package found, reading stopped" << std::endl;
           break;
         }
@@ -354,12 +615,12 @@ std::string CxxWinapi::read_pipe_async(win_usb_handle winusb_interface_handle, c
     else if (wait_result == WAIT_TIMEOUT)
     {
       std::cout << "wait_timeout" << std::endl;
-      return printer_answer;
+      return printer_response;
     }
     else
     {
       std::cout << "wait unknown" << std::endl;
-      return printer_answer;
+      return printer_response;
     }
   }
 
@@ -367,27 +628,93 @@ std::string CxxWinapi::read_pipe_async(win_usb_handle winusb_interface_handle, c
 
   LocalFree(read_buffer);
 
-  return printer_answer;
+  return printer_response;
+}
+
+std::string CxxWinapi::read_file_async(file_interface_handle file_iface_handle) 
+{
+  std::string printer_response;
+
+  OVERLAPPED overlapped_read;
+  ZeroMemory(&overlapped_read, sizeof(OVERLAPPED));
+  overlapped_read.hEvent = CreateEventW(NULL, TRUE, TRUE, NULL);
+
+  ULONG read_buffer_size = 4096;
+  UCHAR *read_buffer = (UCHAR *)LocalAlloc(LPTR, sizeof(UCHAR) * read_buffer_size);  
+  ULONG bytes_readed_readpipe = 0;     // not used, only need for non-overlapped read
+  DWORD bytes_readed = 0;
+
+  bool read_ended = false;
+  while (!read_ended)
+  {
+    if (!ReadFile(file_iface_handle, read_buffer, read_buffer_size, &bytes_readed_readpipe, &overlapped_read))
+    {
+      DWORD read_pipe = GetLastError();      
+      if (read_pipe != ERROR_IO_PENDING) {
+        std::cout << "ReadFile error (not IO_PENDING) " << GetLastError() << std::endl;
+        read_ended = true;
+        break;
+      }
+    }
+
+    DWORD wait_result = WaitForSingleObject(overlapped_read.hEvent, INFINITE);
+    if (wait_result == WAIT_OBJECT_0)
+    {
+      bool over_res = GetOverlappedResult(file_iface_handle, &overlapped_read, &bytes_readed, TRUE);      
+      if (!over_res) {
+        std::cout << "GetOverlappedResult error " << GetLastError() << std::endl;
+        return printer_response;
+      }
+      
+      if (bytes_readed > 0)
+      {
+        printer_response.append(reinterpret_cast<const char *>(read_buffer));
+
+        if (printer_response.find("</html>") != std::string::npos) {
+          std::cout << "end of package found, reading stopped" << std::endl;
+          break;
+        }
+      }
+
+      ResetEvent(overlapped_read.hEvent);
+    }
+    else if (wait_result == WAIT_TIMEOUT)
+    {
+      std::cout << "wait_timeout" << std::endl;
+      return printer_response;
+    }
+    else
+    {
+      std::cout << "wait unknown" << std::endl;
+      return printer_response;
+    }
+  }
+
+  CloseHandle(overlapped_read.hEvent);
+
+  LocalFree(read_buffer);
+
+  return printer_response;
 }
 
 std::string CxxWinapi::get_status_from_html(const std::string& printer_answer)
 {
   auto index = printer_answer.find("deviceStatus_tableCell");
   if(index != std::string::npos) {
-    std::string status_block(printer_answer, index, 500);
-    if(status_block.find("Sleep&nbsp;mode")) {
+    std::string status_block(printer_answer, index, 200);
+    if(status_block.find("Sleep&nbsp;mode") != std::string::npos) {
       return std::string("Sleep mode is on");
     }
-    else if(status_block.find("Initializing")) {
+    else if(status_block.find("Initializing") != std::string::npos) {
       return std::string("Initializing");
     }
-    else if(status_block.find("Ready")) {
+    else if(status_block.find("Ready") != std::string::npos) {
       return std::string("Ready");
     }
-    else if(status_block.find("Load&nbsp;paper")) {
+    else if(status_block.find("Load&nbsp;paper") != std::string::npos) {
       return std::string("Load paper");
     }
-    else if(status_block.find("Door&nbsp;is&nbsp;open")) {
+    else if(status_block.find("Door&nbsp;is&nbsp;open") != std::string::npos) {
       return std::string("Door is open");
     }
   }

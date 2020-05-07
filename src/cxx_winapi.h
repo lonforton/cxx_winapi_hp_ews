@@ -22,22 +22,39 @@ class CxxWinapi {
 
   public:
     using p_dev_interface_guid = GUID*;
-    using win_usb_handle = WINUSB_INTERFACE_HANDLE;
+    using p_class_interface_guid = GUID*;
+    using winusb_interface_handle = WINUSB_INTERFACE_HANDLE;
+    using file_interface_handle = HANDLE;
 
-    device_properties_list get_device_instance_properties(int spdrp_property);
-    device_instance_identifiers_list get_device_instance_identifiers(const std::string& vid, const std::string& pid);
-    p_dev_interface_guid get_device_interface_guid(const std::string& device_instance_identifier);
-    win_usb_handle get_win_usb_handle(p_dev_interface_guid device_interface_guid, const std::string& device_instance_identifier);
-    PipesInfo get_pipes_info(win_usb_handle winusb_interface_handle); 
+    CxxWinapi() {
+      _mi_id += "MI_01";
+    }
 
-    bool write_pipe_async(win_usb_handle winusb_interface_handle, const PipesInfo& pipes_info, const std::string& write_package = std::string{});
-    std::string read_pipe_async(win_usb_handle winusb_interface_handle, const PipesInfo& pipes_info);
+    CxxWinapi(std::string multi_interface_id) : _mi_id(multi_interface_id) {}
+
+    winusb_interface_handle get_winusb_handle(const std::string& vid, const std::string& pid);
+    file_interface_handle get_file_interface_handle(const std::string& vid, const std::string& pid); 
+
+    PipesInfo get_pipes_info(winusb_interface_handle winusb_iface_handle); 
+
+    bool write_pipe_async(winusb_interface_handle winusb_iface_handle, const PipesInfo& pipes_info, const std::string& out_package = std::string{});
+    bool write_file_async(winusb_interface_handle file_iface_handle, const std::string& out_package = std::string{});
+    std::string read_pipe_async(file_interface_handle winusb_iface_handle, const PipesInfo& pipes_info);
+    std::string read_file_async(file_interface_handle file_iface_handle);
 
     std::string get_status_from_html(const std::string& printer_answer);
 
     bool set_security();
 
   private:
+
+    device_properties_list get_device_instance_properties(int spdrp_property);
+    device_instance_identifiers_list get_usb_device_instance_identifiers(const std::string& vid, const std::string& pid);
+    device_instance_identifiers_list get_all_device_instance_identifiers(const std::string& vid, const std::string& pid);
+    p_dev_interface_guid get_device_interface_guid(const std::string& device_instance_identifier);
+    p_class_interface_guid get_class_interface_guid(const std::string& vid, const std::string& pid, const std::string& search_string = "MI_01");
+    winusb_interface_handle obtain_winusb_handle(p_dev_interface_guid device_interface_guid, const std::string& device_instance_identifier);
+    file_interface_handle obtain_file_interface_handle(p_class_interface_guid device_interface_guid, const std::string& device_instance_identifier);   
 
     std::string get_device_property(HDEVINFO hdevinfo, SP_DEVINFO_DATA DeviceInfoData, int spdrp_property);
     std::wstring get_string_reg_key(const std::wstring& registry_path, const std::wstring &strValueName, const std::wstring &strDefaultValue);
@@ -50,6 +67,8 @@ class CxxWinapi {
       }
       return s;
     }
+
+    std::string _mi_id;
 
     wstring_converter converter;
 
