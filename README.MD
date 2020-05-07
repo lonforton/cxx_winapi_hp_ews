@@ -2,23 +2,25 @@
 
 **Input:** printer's vid and pid
 
-**Output:** printer usb response or printer status
+**Output:** printer full response or printer status
 
-Winapi wrapper to connect to embedded web server in HP printers (HP EWS) via usb and get device current status.
-Writing and reading is in async mode. 
+Winapi wrapper to connect to embedded web server in HP printers (HP EWS) via usb and get device current status. Async read and write modes. 
 
-If you already know you GUID and device instance ID (USB\VID_xxxx&PID_xxxx&xxxxxx), you can predefine them, see "Defining GUIDs and device IDs" below. If you don't, you need to know only vid and pid of the device.
+For the start you only need to know only vid and pid of the device. If you need to set security, call ```CxxWinapi::set_security``` before calling ```CxxWinapi::get_winusb_handle``` or ```CxxWinapi::get_file_interface_handle``` function.
 
-If you need to set security, call CxxWinapi::set_security before calling CxxWinapi::get_win_usb_handle function.
+If winusb handle wasn't found, it's either printer disconnected or there's no possibility to use winusb interface, you should call ```CxxWinapi::get_file_interface_handle``` to obtain file interface and use it with corresponding function.
 
 By default standard out package will be used to get printer response, but you can specify your own package, just don't forget about new line control character.
 
-Printer responsed as html page inside xml packet which contains status inside "deviceStatus_tableCell" tag. You can call CxxWinapi::get_text_status_from_html to get only status string.
+Printer responsed as html page inside xml packet which contains status inside "deviceStatus_tableCell" tag. You can call ```CxxWinapi::get_text_status_from_html``` to get only status string.
+
 
 
 ## Defining GUIDs and device IDs
 
-Two ways to define Device Interface Guid
+It's possible to use your our GUIDs and IDs, check insides of CxxWinapi::get_winusb_handle or CxxWinapi::get_file_interface_handle
+
+There are two ways to define Device Interface Guid
 
 ```
 // example  GUID_DEVINTERFACE_DISK {53F56307-B6BF-11D0-94F2-00A0C91EFB8B}
@@ -37,6 +39,9 @@ Define device instance identifier
 ```
 WCHAR DeviceInstanceID[] = L"USB\\VID_03F0&PID_612A&MI_01\\6&2EF0B81C&1&0001\0";
 ```
+
+## Issues:
+Couldn't deduce GUID for file_interface programmatically, looks like it's the same in every OS
 
 
 ## Registry entries examples (HP LaserJet M104a)
