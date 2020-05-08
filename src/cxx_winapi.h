@@ -1,13 +1,10 @@
 #include <windows.h>
 #include <winusb.h>
-#include <setupapi.h>
 #include <aclapi.h>
 #include <accctrl.h>
 #include <cfgmgr32.h>
 
 #include <iostream>
-#include <codecvt>
-#include <locale>
 #include <list>
 
 struct PipesInfo {
@@ -16,7 +13,6 @@ struct PipesInfo {
 };
 
 class CxxWinapi {
-  using wstring_converter = std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>;  
   using device_instance_identifiers_list = std::list<std::string>;
   using device_properties_list = std::list<std::string>;
 
@@ -26,11 +22,9 @@ class CxxWinapi {
     using winusb_interface_handle = WINUSB_INTERFACE_HANDLE;
     using file_interface_handle = HANDLE;
 
-    CxxWinapi() {
-      _mi_id += "MI_01";
-    }
-
-    CxxWinapi(std::string multi_interface_id) : _mi_id(multi_interface_id) {}
+    CxxWinapi();
+    CxxWinapi(std::string multi_interface_id);
+    ~CxxWinapi();
 
     winusb_interface_handle get_winusb_handle(const std::string& vid, const std::string& pid);
     file_interface_handle get_file_interface_handle(const std::string& vid, const std::string& pid); 
@@ -56,8 +50,11 @@ class CxxWinapi {
     winusb_interface_handle obtain_winusb_handle(p_dev_interface_guid device_interface_guid, const std::string& device_instance_identifier);
     file_interface_handle obtain_file_interface_handle(p_class_interface_guid device_interface_guid, const std::string& device_instance_identifier);   
 
-    std::string get_device_property(HDEVINFO hdevinfo, SP_DEVINFO_DATA DeviceInfoData, int spdrp_property);
+    //std::string get_device_property(HDEVINFO hdevinfo, SP_DEVINFO_DATA DeviceInfoData, int spdrp_property);
     std::wstring get_string_reg_key(const std::wstring& registry_path, const std::wstring &strValueName, const std::wstring &strDefaultValue);
+
+    std::wstring ansistring_to_wide(std::string const &Str, UINT CodePage = CP_ACP);
+    std::string widestring_to_ansi(std::wstring const &Str, UINT CodePage = CP_ACP);
 
     std::string hexStr2(unsigned char* data, int len) {
       std::string s(len * 2, ' ');
@@ -70,9 +67,8 @@ class CxxWinapi {
 
     std::string _mi_id;
 
-    wstring_converter converter;
+    HANDLE _h_drive;
 
     constexpr static char hexmap[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
                            '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-
 };

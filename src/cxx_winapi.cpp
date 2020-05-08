@@ -1,6 +1,28 @@
 #include "cxx_winapi.h"
 
+#include <setupapi.h>
+
 #include <sstream>
+#include <vector>
+
+CxxWinapi::CxxWinapi()
+{
+  _mi_id += "MI_01";
+}
+
+CxxWinapi::CxxWinapi(std::string multi_interface_id)
+  : _mi_id(multi_interface_id)
+{
+
+}
+
+CxxWinapi::~CxxWinapi()
+{
+  if(_h_drive) {
+    std::cout << "Handle closed" << std::endl;
+    CloseHandle(_h_drive);
+  }
+}
 
 CxxWinapi::device_properties_list CxxWinapi::get_device_instance_properties(int spdrp_property) 
 {
@@ -16,26 +38,27 @@ CxxWinapi::device_properties_list CxxWinapi::get_device_instance_properties(int 
   }
 
   DeviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
-  for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData); ++i) {            
-  DWORD DataT;
-  LPWSTR buffer = NULL;
-  DWORD buffersize = 0;
+  for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &DeviceInfoData); ++i) {
+    DWORD DataT;
+    LPWSTR buffer = NULL;
+    DWORD buffersize = 0;
 
-  while (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &DeviceInfoData, spdrp_property,
-                                            &DataT, (PBYTE)buffer, buffersize, &buffersize)) {
-    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-      if (buffer) LocalFree(buffer);
-      buffer = (LPWSTR)LocalAlloc(LPTR, buffersize * 2);
-    } else {
-      break;
+    while (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &DeviceInfoData, spdrp_property,
+                                              &DataT, (PBYTE)buffer, buffersize, &buffersize)) {
+      if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+        if (buffer) LocalFree(buffer);
+        buffer = (LPWSTR)LocalAlloc(LPTR, buffersize * 2);
+      }
+      else {
+        break;
+      }
     }
-  }
 
-  if (buffer != NULL) {
-    device_props_list.emplace_back(converter.to_bytes(std::wstring(buffer)));
-  }
+    if (buffer != NULL) {
+      device_props_list.emplace_back(widestring_to_ansi(std::wstring(buffer)));
+    }
 
-  if (buffer) LocalFree(buffer);
+    if (buffer) LocalFree(buffer);
 
   }
 
@@ -48,17 +71,18 @@ CxxWinapi::device_properties_list CxxWinapi::get_device_instance_properties(int 
   return device_props_list;
 }
 
-CxxWinapi::device_instance_identifiers_list CxxWinapi::get_usb_device_instance_identifiers(const std::string& vid, const std::string& pid) {
+CxxWinapi::device_instance_identifiers_list CxxWinapi::get_usb_device_instance_identifiers(const std::string& vid, const std::string& pid)
+{
   device_instance_identifiers_list devices_list;
 
-  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(converter.from_bytes(vid)).append(L"&PID_").append(converter.from_bytes(pid));
+  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(ansistring_to_wide(vid)).append(L"&PID_").append(ansistring_to_wide(pid));
 
   HDEVINFO hDevInfo;
   SP_DEVINFO_DATA DeviceInfoData;
   hDevInfo = SetupDiGetClassDevsW(NULL, L"USB", 0, DIGCF_ALLCLASSES | DIGCF_PROFILE);
 
   if (hDevInfo == INVALID_HANDLE_VALUE) {
-    std::cout << "hDevInfo INVALID_HANDLE_VALUE" << std::endl;
+    std::cerr << "hDevInfo INVALID_HANDLE_VALUE" << std::endl;
     return device_instance_identifiers_list{};
   }
 
@@ -70,11 +94,11 @@ CxxWinapi::device_instance_identifiers_list CxxWinapi::get_usb_device_instance_i
     CONFIGRET ret = CM_Get_Device_IDW(DeviceInfoData.DevInst, device_ids_buff, device_ids_buff_len, 0);
     if (ret == CR_SUCCESS) {      
       if (wcsstr(device_ids_buff, device_to_find.c_str())) {
-        devices_list.emplace_back(converter.to_bytes(std::wstring(device_ids_buff)));
+        devices_list.emplace_back(widestring_to_ansi(std::wstring(device_ids_buff)));
       }
     } 
     else {
-      std::cout << "CM_Get_Device_IDW error " << ret << " for usb device " << std::to_string(i) << std::endl;
+      //std::cout << "CM_Get_Device_IDW error " << ret << " for usb device " << std::to_string(i) << std::endl;
     }
   }
 
@@ -90,7 +114,7 @@ CxxWinapi::device_instance_identifiers_list CxxWinapi::get_usb_device_instance_i
 CxxWinapi::device_instance_identifiers_list CxxWinapi::get_all_device_instance_identifiers(const std::string& vid, const std::string& pid) {
   device_instance_identifiers_list devices_list;
 
-  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(converter.from_bytes(vid)).append(L"&PID_").append(converter.from_bytes(pid));
+  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(ansistring_to_wide(vid)).append(L"&PID_").append(ansistring_to_wide(pid));
 
   HDEVINFO hDevInfo;
   SP_DEVINFO_DATA DeviceInfoData;
@@ -109,11 +133,11 @@ CxxWinapi::device_instance_identifiers_list CxxWinapi::get_all_device_instance_i
     CONFIGRET ret = CM_Get_Device_IDW(DeviceInfoData.DevInst, device_ids_buff, device_ids_buff_len, 0);
     if (ret == CR_SUCCESS) {      
       if (wcsstr(device_ids_buff, device_to_find.c_str())) {
-        devices_list.emplace_back(converter.to_bytes(std::wstring(device_ids_buff)));
+        devices_list.emplace_back(widestring_to_ansi(std::wstring(device_ids_buff)));
       }
     } 
     else {
-      std::cout << "CM_Get_Device_IDW error " << ret << " for usb device " << std::to_string(i) << std::endl;
+      //std::cout << "CM_Get_Device_IDW error " << ret << " for usb device " << std::to_string(i) << std::endl;
     }
   }
 
@@ -129,14 +153,11 @@ CxxWinapi::device_instance_identifiers_list CxxWinapi::get_all_device_instance_i
 CxxWinapi::p_dev_interface_guid CxxWinapi::get_device_interface_guid(const std::string& device_instance_identifier)
 {
   std::wstring registry_path = std::wstring().append(L"SYSTEM\\CurrentControlSet\\Enum\\")
-                                             .append(converter.from_bytes(device_instance_identifier))
+                                             .append(ansistring_to_wide(device_instance_identifier))
                                              .append(L"\\Device Parameters");
-
   
 
   std::wstring guid_reg_value = get_string_reg_key(registry_path, L"DeviceInterfaceGUID", L"");    
-
-  std::wcout << registry_path << " " << guid_reg_value << std::endl;
 
   GUID *guid = new GUID();
 
@@ -148,9 +169,9 @@ CxxWinapi::p_dev_interface_guid CxxWinapi::get_device_interface_guid(const std::
 CxxWinapi::p_class_interface_guid CxxWinapi::get_class_interface_guid(const std::string& vid, const std::string& pid, const std::string& search_string)
 {
 
-  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(converter.from_bytes(vid))
-                                              .append(L"&PID_").append(converter.from_bytes(pid))
-                                              .append(L"&").append(converter.from_bytes(search_string));
+  std::wstring device_to_find = std::wstring().append(L"USB\\VID_").append(ansistring_to_wide(vid))
+                                              .append(L"&PID_").append(ansistring_to_wide(pid))
+                                              .append(L"&").append(ansistring_to_wide(search_string));
 
                                               std::wcout << device_to_find << std::endl;
 
@@ -159,7 +180,7 @@ CxxWinapi::p_class_interface_guid CxxWinapi::get_class_interface_guid(const std:
   hDevInfo = SetupDiGetClassDevsW(NULL, NULL, 0, DIGCF_ALLCLASSES | DIGCF_PROFILE);
 
   if (hDevInfo == INVALID_HANDLE_VALUE) {
-    std::cout << "hDevInfo INVALID_HANDLE_VALUE" << std::endl;
+    std::cerr << "hDevInfo INVALID_HANDLE_VALUE" << std::endl;
     return NULL;
   }
 
@@ -173,22 +194,19 @@ CxxWinapi::p_class_interface_guid CxxWinapi::get_class_interface_guid(const std:
       
       if (wcsstr(device_ids_buff, device_to_find.c_str())) {
         
-        ULONG  pulRegDataType = 0;
-        ULONG  pulLength = 0;
-        CM_Get_DevNode_Registry_PropertyW(DeviceInfoData.DevInst, CM_DRP_DRIVER, &pulRegDataType, NULL, &pulLength, 0);
-         std::cout << " - " << DeviceInfoData.DevInst << " " << pulRegDataType << " " << pulLength << std::endl;
-        PVOID *void_buffer = new PVOID[pulLength];
+       ULONG  pulRegDataType = 0;
+       ULONG  pulLength = 0;
+       CM_Get_DevNode_Registry_PropertyW(DeviceInfoData.DevInst, CM_DRP_DRIVER, &pulRegDataType, NULL, &pulLength, 0);
+       PVOID *void_buffer = new PVOID[pulLength];
        CM_Get_DevNode_Registry_PropertyW(DeviceInfoData.DevInst, CM_DRP_DRIVER, &pulRegDataType, void_buffer , &pulLength, 0);
 
-       // std::wcout << std::wstring((PWSTR) void_buffer) << " " << std::endl;          
 
-
-        delete [] void_buffer;
+      delete [] void_buffer;
 
       }
     } 
     else {
-      std::cout << "CM_Get_Device_IDW error " << ret << " for device " << std::to_string(i) << std::endl;
+      std::cerr << "CM_Get_Device_IDW error " << ret << " for device " << std::to_string(i) << std::endl;
     }
   }
 
@@ -201,7 +219,6 @@ CxxWinapi::p_class_interface_guid CxxWinapi::get_class_interface_guid(const std:
   constexpr GUID GUID_DEVINTERFACE_HP_FILE = {0x6bdd1fc6, 0x810f, 0x11d0, { 0xbe, 0xc7, 0x08, 0x00, 0x2b, 0xe2, 0x09, 0x2f}}; //  {6bdd1fc6-810f-11d0-bec7-08002be2092f}
 
   GUID *guid = (GUID*)(void*)&GUID_DEVINTERFACE_HP_FILE;
-  //IIDFromString(guid_reg_value.c_str(), (LPIID)guid);  
 
   return guid;
 }
@@ -257,9 +274,9 @@ bool CxxWinapi::set_security()
 
 CxxWinapi::winusb_interface_handle CxxWinapi::obtain_winusb_handle(p_dev_interface_guid dev_interface_guid, const std::string& device_instance_identifier)
 {
-	HDEVINFO hDevInfo = SetupDiGetClassDevsW(dev_interface_guid, converter.from_bytes(device_instance_identifier).c_str(), NULL, DIGCF_DEVICEINTERFACE);
+  HDEVINFO hDevInfo = SetupDiGetClassDevsW(dev_interface_guid, ansistring_to_wide(device_instance_identifier).c_str(), NULL, DIGCF_DEVICEINTERFACE);
 	if (hDevInfo == INVALID_HANDLE_VALUE) {
-		std::cout << "Invalid SetupDiGetClassDevs" << std::endl;
+    std::cerr << "Invalid SetupDiGetClassDevs" << GetLastError() << std::endl;
 		return NULL;
 	}
 
@@ -271,7 +288,7 @@ CxxWinapi::winusb_interface_handle CxxWinapi::obtain_winusb_handle(p_dev_interfa
 
   bool bRet = SetupDiEnumDeviceInterfaces(hDevInfo, NULL, dev_interface_guid, dwIndex, &devInterfaceData);
   if (!bRet) {
-    std::cout << "SetupDiEnumDeviceInterfaces error " << GetLastError() << std::endl;
+    std::cerr << "SetupDiEnumDeviceInterfaces error " << GetLastError() << std::endl;
     return NULL;
   }
 
@@ -283,10 +300,10 @@ CxxWinapi::winusb_interface_handle CxxWinapi::obtain_winusb_handle(p_dev_interfa
   DWORD dwSize = 0;
   SetupDiGetDeviceInterfaceDetailW(hDevInfo, &spdid, NULL, 0, &dwSize, NULL);
   if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
-    std::cout << "SetupDiGetDeviceInterfaceDetailW" << std::endl;
+    std::cerr << "SetupDiGetDeviceInterfaceDetailW error" << std::endl;
     return NULL;
   } else if (dwSize == 0 && dwSize > sizeof(Buf)) {
-    std::cout << "SetupDiGetDeviceInterfaceDetailW with NULL - returned size is 0 or small" << std::endl;
+    std::cerr << "SetupDiGetDeviceInterfaceDetailW with NULL - returned size is 0 or small" << std::endl;
     return NULL;
   }
 
@@ -297,19 +314,19 @@ CxxWinapi::winusb_interface_handle CxxWinapi::obtain_winusb_handle(p_dev_interfa
 
   long res = SetupDiGetDeviceInterfaceDetailW(hDevInfo, &spdid, pspdidd, dwSize, &dwSize, &spdd);
   if (!res) {
-    std::cout << "Invalid SetupDiGetDeviceInterfaceDetail" << std::endl;
+    std::cerr << "Invalid SetupDiGetDeviceInterfaceDetail " << GetLastError() << std::endl;
     return NULL;
   }
 
-  HANDLE hDrive = CreateFileW(pspdidd->DevicePath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
-  if (hDrive == INVALID_HANDLE_VALUE) {
-    std::cout << "CreateFileW error " << GetLastError() << " for " << device_instance_identifier << std::endl;
+  _h_drive = CreateFileW(pspdidd->DevicePath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+  if (_h_drive == INVALID_HANDLE_VALUE) {
+    std::cerr << "CreateFileW error " << GetLastError() << " for " << device_instance_identifier << std::endl;
     return NULL;
   }
 
   WINUSB_INTERFACE_HANDLE winusb_interface_handle;
 
-  if (!WinUsb_Initialize(hDrive, &winusb_interface_handle)) {
+  if (!WinUsb_Initialize(_h_drive, &winusb_interface_handle)) {
     std::cout << "WinUsb_Initialize error " << GetLastError() << std::endl;
     return NULL;
   }
@@ -331,18 +348,22 @@ CxxWinapi::winusb_interface_handle CxxWinapi::get_winusb_handle(const std::strin
   }  
 
   if(device_instance_identifier.empty()) {
-    std::cout << "usb device not found" << std::endl;
+    std::cerr << "usb device not found" << std::endl;
     return NULL;
   }
 
-   // getting device interface guid for MI_01 (common for all MI_01)
   p_dev_interface_guid device_interface_guid = get_device_interface_guid(device_instance_identifier);
+
+  if(device_interface_guid == NULL) {
+    std::cerr << "can't get device_interface_guid" << std::endl;
+    return NULL;
+  }
 
   CxxWinapi::winusb_interface_handle winusb_iface_handle;
   for(const auto& item : devices_identifiers) {    
     if(item.find(_mi_id) != std::string::npos) { 
       winusb_iface_handle = obtain_winusb_handle(device_interface_guid, item);
-      if(winusb_iface_handle){
+      if(winusb_iface_handle) {
         device_instance_identifier = item;
         break;        
       } 
@@ -354,7 +375,7 @@ CxxWinapi::winusb_interface_handle CxxWinapi::get_winusb_handle(const std::strin
 
 CxxWinapi::file_interface_handle CxxWinapi::obtain_file_interface_handle(p_class_interface_guid dev_interface_guid, const std::string& device_instance_identifier)
 {  
-  HDEVINFO hDevInfo = SetupDiGetClassDevsW(dev_interface_guid, converter.from_bytes(device_instance_identifier).c_str(), NULL, DIGCF_DEVICEINTERFACE);
+  HDEVINFO hDevInfo = SetupDiGetClassDevsW(dev_interface_guid, ansistring_to_wide(device_instance_identifier).c_str(), NULL, DIGCF_DEVICEINTERFACE);
 	if (hDevInfo == INVALID_HANDLE_VALUE) {
 		std::cout << "Invalid SetupDiGetClassDevs" << std::endl;
 		return NULL;
@@ -368,7 +389,7 @@ CxxWinapi::file_interface_handle CxxWinapi::obtain_file_interface_handle(p_class
 
   bool bRet = SetupDiEnumDeviceInterfaces(hDevInfo, NULL, dev_interface_guid, dwIndex, &devInterfaceData);
   if (!bRet) {
-    std::cout << "SetupDiEnumDeviceInterfaces error " << GetLastError() << std::endl;
+    std::cerr << "SetupDiEnumDeviceInterfaces (obtain_file_interface_handle) error " << GetLastError() << std::endl;
     return NULL;
   }
 
@@ -743,30 +764,51 @@ std::wstring CxxWinapi::get_string_reg_key(const std::wstring& registry_path, co
     return strValue;
 }
 
-std::string CxxWinapi::get_device_property(HDEVINFO hDevInfo, SP_DEVINFO_DATA DeviceInfoData, int spdrp_property) 
+std::wstring CxxWinapi::ansistring_to_wide(std::string const &Str, UINT CodePage)
 {
-  std::string device_property;
-
-  DWORD DataT;
-  LPWSTR buffer = NULL;
-  DWORD buffersize = 0;
-
-  while (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &DeviceInfoData, spdrp_property,
-                                            &DataT, (PBYTE)buffer, buffersize, &buffersize)) {
-    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-      if (buffer) LocalFree(buffer);
-      buffer = (LPWSTR)LocalAlloc(LPTR, buffersize * 2);
-    } else {
-      break;
-    }
-  }
-
-  if (buffer != NULL) {
-    std::wcout << buffer << std::endl;
-    device_property += converter.to_bytes(std::wstring(buffer));
-  }
-
-  if (buffer) LocalFree(buffer);
-
-  return device_property;
+    DWORD const BuffSize = MultiByteToWideChar(CodePage, 0, Str.c_str(), -1, NULL, 0);
+    if (!BuffSize) return NULL;
+    std::vector<wchar_t> Buffer;
+    Buffer.resize(BuffSize);
+    if (!MultiByteToWideChar(CodePage, 0, Str.c_str(), -1, &Buffer[0], BuffSize)) return NULL;
+    return (&Buffer[0]);
 }
+
+std::string CxxWinapi::widestring_to_ansi(std::wstring const &Str, UINT CodePage)
+{
+    DWORD const BuffSize = WideCharToMultiByte(CodePage, 0, Str.c_str(), -1, NULL, 0, NULL, NULL);
+    if (!BuffSize) return NULL;
+    std::vector<char> Buffer;
+    Buffer.resize(BuffSize);
+    if (!WideCharToMultiByte(CodePage, 0, Str.c_str(), -1, &Buffer[0], BuffSize, NULL, NULL)) return NULL;
+    return (&Buffer[0]);
+}
+
+
+// std::string CxxWinapi::get_device_property(HDEVINFO hDevInfo, SP_DEVINFO_DATA DeviceInfoData, int spdrp_property) 
+// {
+//   std::string device_property;
+
+//   DWORD DataT;
+//   LPWSTR buffer = NULL;
+//   DWORD buffersize = 0;
+
+//   while (!SetupDiGetDeviceRegistryPropertyW(hDevInfo, &DeviceInfoData, spdrp_property,
+//                                             &DataT, (PBYTE)buffer, buffersize, &buffersize)) {
+//     if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+//       if (buffer) LocalFree(buffer);
+//       buffer = (LPWSTR)LocalAlloc(LPTR, buffersize * 2);
+//     } else {
+//       break;
+//     }
+//   }
+
+//   if (buffer != NULL) {
+//     std::wcout << buffer << std::endl;
+//     device_property += converter.to_bytes(std::wstring(buffer));
+//   }
+
+//   if (buffer) LocalFree(buffer);
+
+//   return device_property;
+// }
