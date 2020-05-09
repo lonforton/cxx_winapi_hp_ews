@@ -36,7 +36,7 @@ class CxxWinapi {
     std::string read_pipe_async(file_interface_handle winusb_iface_handle, const PipesInfo& pipes_info);
     std::string read_file_async(file_interface_handle file_iface_handle);
 
-    std::string get_status_from_html(const std::string& printer_answer);
+    std::string get_status_from_html(const std::string& printer_response);
 
     bool set_security();
 
@@ -48,9 +48,8 @@ class CxxWinapi {
     p_dev_interface_guid get_device_interface_guid(const std::string& device_instance_identifier);
     p_class_interface_guid get_class_interface_guid(const std::string& vid, const std::string& pid, const std::string& search_string = "MI_01");
     winusb_interface_handle obtain_winusb_handle(p_dev_interface_guid device_interface_guid, const std::string& device_instance_identifier);
-    file_interface_handle obtain_file_interface_handle(p_class_interface_guid device_interface_guid, const std::string& device_instance_identifier);   
+    file_interface_handle obtain_file_interface_handle(p_class_interface_guid device_interface_guid, const std::string& device_instance_identifier);
 
-    //std::string get_device_property(HDEVINFO hdevinfo, SP_DEVINFO_DATA DeviceInfoData, int spdrp_property);
     std::wstring get_string_reg_key(const std::wstring& registry_path, const std::wstring &strValueName, const std::wstring &strDefaultValue);
 
     std::wstring ansistring_to_wide(std::string const &Str, UINT CodePage = CP_ACP);
